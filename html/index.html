@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+    html, body {
+      width:  100%;
+      height: 100%;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <canvas></canvas>
+  <table cellspacing="8" id="status">
+    <tr><th align="right">Decode</th><td id="decode">Not started</td></tr>
+    <tr><th align="right">Render</th><td id="render">Not started</td></tr>
+    <tr><th align="right">Decode Queue</th><td id="decodequeue">0 frame(s)</td></tr>
+    <tr><th align="right">Render Queue</th><td id="renderqueue">0 frame(s)</td></tr>
+  </table>
+
+  <script type="module">
+    const status = {
+      decode: document.querySelector("#decode"),
+      render: document.querySelector("#render"),
+      decodequeue: document.querySelector("#decodequeue"),
+      renderqueue: document.querySelector("#renderqueue"),
+    };
+
+    function setStatus(message) {
+      for (const key in message.data) {
+        status[key].innerText = message.data[key];
+      }
+    }
+
+    const canvas = document.querySelector("canvas").transferControlToOffscreen();
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const worker = new Worker("./worker.js");
+    worker.addEventListener("message", setStatus);
+    worker.postMessage({canvas}, [canvas]);
+
+    let video_socket = new WebSocket(`wss://${window.location.host}/video`);
+    video_socket.addEventListener('message', async (event) => {
+      const buf = await event.data.arrayBuffer();
+      worker.postMessage({
+        type: "key",
+        timestamp: (event.timestamp * 1000) | 0,
+        data: buf,
+      }, [buf]);
+    });
+  </script>
+</body>
+</html>

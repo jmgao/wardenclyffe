@@ -1,0 +1,56 @@
+cc_binary {
+    name: "wardenclyffe",
+    srcs: [
+        "android/audio/audio.cpp",
+        "android/audio/pcm.cpp",
+        "android/input.cpp",
+        "android/video/h264.cpp",
+        "android/video/mjpeg.cpp",
+        "android/video/video.cpp",
+        "android/socket.cpp",
+    ],
+    compile_multilib: "first",
+
+    init_rc: [
+        "wardenclyffe.rc"
+    ],
+
+    local_include_dirs: ["include"],
+    static_libs: [
+        "libwardenclyffe"
+    ],
+
+    header_libs: [
+        "libmediadrm_headers",
+        "libmediametrics_headers",
+    ],
+    shared_libs: [
+        "libbase",
+        "libbinder",
+        "liblog",
+        "libutils",
+        "libcutils",
+
+        "libstagefright",
+        "libstagefright_foundation",
+        "libmedia",
+        "libmediandk",
+        "libmedia_omx",
+
+        "libui",
+        "libgui",
+    ],
+}
+
+cc_prebuilt_library_static {
+    name: "libwardenclyffe",
+
+    target: {
+        android_arm64: {
+            srcs: ["target/aarch64-linux-android/release/libwardenclyffe.a"],
+        },
+        android_x86_64: {
+            srcs: ["target/x86_64-linux-android/release/libwardenclyffe.a"],
+        },
+    },
+}

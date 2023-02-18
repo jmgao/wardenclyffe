@@ -1,0 +1,7 @@
+service wardenclyffe /system/bin/linker64 /system/bin/wardenclyffe
+    disabled
+    user root
+    seclabel u:r:su:s0
+
+on post-fs
+    start wardenclyffe

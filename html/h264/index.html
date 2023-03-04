@@ -36,7 +36,7 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const worker = new Worker("./worker.js");
+    const worker = new Worker("/h264/worker.js");
     worker.addEventListener("message", setStatus);
     worker.postMessage({canvas}, [canvas]);
 

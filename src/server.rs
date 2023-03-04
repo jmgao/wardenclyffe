@@ -161,14 +161,22 @@ pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<
     return Ok(response);
   }
 
-  let path = &path[1..];
-  let path = if path.is_empty() { "index.html" } else { path };
-
+  let mut path = &path[1..];
   if let Some(file) = HTML_DIR.get_file(path) {
-    Ok(Response::new(Body::from(file.contents())))
-  } else {
-    let mut response = Response::new(Body::from(format!("File not found: {path}")));
-    *response.status_mut() = StatusCode::NOT_FOUND;
-    Ok(response)
+    return Ok(Response::new(Body::from(file.contents())));
   }
+
+  // Assume it's a directory, look for index.html.
+  while path.ends_with('/') {
+    path = &path[..path.len() - 1];
+  }
+
+  let index_path = format!("{}/{}", path, "index.html");
+  if let Some(file) = HTML_DIR.get_file(&index_path) {
+    return Ok(Response::new(Body::from(file.contents())));
+  }
+
+  let mut response = Response::new(Body::from(format!("File not found: {path}")));
+  *response.status_mut() = StatusCode::NOT_FOUND;
+  Ok(response)
 }

@@ -20,7 +20,7 @@ pub struct Config {
 
 impl Config {
   pub fn populate_defaults(mut self) -> Self {
-    self.tls = self.tls.or(Some(TLS::Disabled));
+    self.tls = self.tls.or(Some(TLS::SelfSigned));
     self.port = self.port.or(self.tls.as_ref().map(|_| 8443).or(Some(8443)));
     self
   }

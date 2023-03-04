@@ -40,7 +40,7 @@
     worker.addEventListener("message", setStatus);
     worker.postMessage({canvas}, [canvas]);
 
-    let video_socket = new WebSocket(`wss://${window.location.host}/video`);
+    let video_socket = new WebSocket(`wss://${window.location.host}/video/h264/`);
     video_socket.addEventListener('message', async (event) => {
       const buf = await event.data.arrayBuffer();
       worker.postMessage({

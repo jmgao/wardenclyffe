@@ -28,7 +28,7 @@ async fn handle_websocket(
   request: Request<Body>,
   addr: SocketAddr,
 ) -> Result<()> {
-  eprintln!("{addr}: WebSocket established (uri = {})", request.uri());
+  info!("{addr}: WebSocket established (uri = {})", request.uri());
   let path = CString::new(request.uri().path())?;
 
   let wardenclyffe_socket = unsafe { wardenclyffe_create_socket(path.as_ptr()) };
@@ -38,7 +38,7 @@ async fn handle_websocket(
 
   let (mut outgoing, incoming) = ws_stream.split();
   let incoming = incoming.try_for_each(|msg| {
-    eprintln!("{addr}: received message: {}", msg.to_text().unwrap());
+    info!("{addr}: received message: {}", msg.to_text().unwrap());
     future::ok(())
   });
 
@@ -52,7 +52,7 @@ async fn handle_websocket(
         };
 
         if reads.read_count < 0 {
-          eprintln!("{addr}: WardenclyffeSocket::read failed: rc = {}", reads.read_count);
+          error!("{addr}: WardenclyffeSocket::read failed: rc = {}", reads.read_count);
           let _ = outgoing
             .send(Message::Close(Some(CloseFrame {
               code: CloseCode::Error,
@@ -61,7 +61,7 @@ async fn handle_websocket(
             .await;
           return;
         } else if reads.read_count == 0 {
-          eprintln!("{addr}: WardenclyffeSocket hit EOF");
+          info!("{addr}: WardenclyffeSocket hit EOF");
           let _ = outgoing
             .send(Message::Close(Some(CloseFrame {
               code: CloseCode::Normal,
@@ -81,7 +81,7 @@ async fn handle_websocket(
             outgoing.send(Message::Binary(buf))
           };
           if let Err(e) = result.await {
-            eprintln!("{addr}: failed to send: {e}");
+            error!("{addr}: failed to send: {e}");
             return;
           }
         }
@@ -92,7 +92,7 @@ async fn handle_websocket(
   pin_mut!(incoming, outgoing);
   future::select(incoming, outgoing).await;
 
-  eprintln!("{addr}: disconnected");
+  info!("{addr}: disconnected");
   unsafe {
     wardenclyffe_destroy_socket(wardenclyffe_socket);
   }
@@ -136,10 +136,10 @@ pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<
           )
           .await
           {
-            eprintln!("failed to handle websocket: {e:?}");
+            error!("failed to handle websocket: {e:?}");
           }
         }
-        Err(e) => eprintln!("upgrade error: {}", e),
+        Err(e) => error!("upgrade error: {}", e),
       }
     });
     let mut res = Response::new(Body::empty());
@@ -153,7 +153,7 @@ pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<
     return Ok(res);
   }
 
-  eprintln!("HTTP request for {}", req.uri());
+  info!("HTTP request for {}", req.uri());
   let path = req.uri().path();
   if !path.starts_with('/') {
     let mut response = Response::new(Body::from("Bad request"));

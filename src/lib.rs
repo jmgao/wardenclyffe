@@ -10,6 +10,9 @@ use hyper::{
 };
 use rustls_pemfile::Item;
 
+#[macro_use]
+extern crate log;
+
 mod cli;
 mod config;
 mod ffi;
@@ -109,6 +112,8 @@ impl Server {
   }
 
   pub fn run(self) -> Result<()> {
+    android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info));
+
     let config = self.config.populate_defaults();
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async move {

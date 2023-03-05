@@ -26,6 +26,9 @@ rcgen = "0.10.0"
 
 include_dir = "0.7.3"
 
+log = "0.4"
+android_logger = "0.13.0"
+
 clap = { version = "4.1.7", features = ["derive"] }
 
 [build-dependencies]

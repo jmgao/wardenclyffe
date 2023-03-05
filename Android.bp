@@ -36,14 +36,15 @@ cc_binary {
         "libutils",
         "libcutils",
 
+        "libui",
+        "libgui",
+
+        "libjnigraphics",
         "libstagefright",
         "libstagefright_foundation",
         "libmedia",
         "libmediandk",
         "libmedia_omx",
-
-        "libui",
-        "libgui",
     ],
 }
 

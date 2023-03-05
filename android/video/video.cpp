@@ -45,6 +45,8 @@ VideoSocket* VideoSocket::Create(std::string_view path) {
   VideoSocket* result = nullptr;
   if (android::base::ConsumePrefix(&path, "h264/")) {
     result = new H264Socket();
+  } else if (android::base::ConsumePrefix(&path, "jpeg/")) {
+    result = new JPEGSocket();
   }
 
   if (result && !result->Initialize()) {
@@ -233,8 +235,8 @@ bool VideoSocket::createVirtualDisplay() {
   BufferQueue::createBufferQueue(&display_producer_, &display_consumer_);
   display_consumer_->setDefaultBufferFormat(PIXEL_FORMAT_RGBA_8888);
   display_consumer_->setDefaultBufferSize(video_width_, video_height_);
-  display_consumer_->setConsumerUsageBits(GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_VIDEO_ENCODER |
-                                          GRALLOC_USAGE_HW_IMAGE_ENCODER);
+
+  display_consumer_->setConsumerUsageBits(getGrallocUsageBits());
   display_consumer_->consumerConnect(display_consumer_callbacks, true);
   display_producer_->connect(display_producer_callbacks, NATIVE_WINDOW_API_MEDIA, true,
                              &queue_buffer_output);

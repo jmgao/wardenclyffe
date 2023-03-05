@@ -67,6 +67,7 @@ struct VideoSocket : public Socket {
 
   virtual bool createEncoder() REQUIRES(buffer_queue_mutex_) = 0;
   virtual bool startEncoder() REQUIRES(buffer_queue_mutex_) = 0;
+  virtual uint64_t getGrallocUsageBits() = 0;
 
   bool emit_descriptors_ = false;
 
@@ -136,6 +137,10 @@ struct MediaCodecSocket : public VideoSocket {
   virtual const char* getCodecMimeType() = 0;
   virtual android::sp<android::AMessage> getCodecFormat() = 0;
 
+  virtual uint64_t getGrallocUsageBits() final {
+    return GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_VIDEO_ENCODER;
+  }
+
   virtual void onFrameReceived() final;
 
   virtual bool createEncoder() final REQUIRES(buffer_queue_mutex_);
@@ -175,10 +180,15 @@ struct JPEGSocket : public VideoSocket {
   JPEGSocket() = default;
 
  protected:
-  bool createEncoder() final;
-  bool startEncoder() final;
+  virtual void onFrameReceived() final;
 
- private:
-  android::sp<android::ALooper> looper_;
-  android::sp<android::MediaCodec> codec_;
+  virtual uint64_t getGrallocUsageBits() final {
+    return GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_VIDEO_ENCODER;
+  }
+
+  virtual bool createEncoder() final { return true; }
+  virtual bool startEncoder() final {
+    running_ = true;
+    return true;
+  }
 };

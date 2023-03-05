@@ -13,5 +13,7 @@
 
 struct Socket {
   virtual ~Socket() = default;
+  virtual void Destroy() = 0;
+
   virtual WardenclyffeReads Read() = 0;
 };

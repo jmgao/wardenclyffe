@@ -32,7 +32,9 @@ WardenclyffeSocket wardenclyffe_create_socket(const char* path_str) {
 }
 
 void wardenclyffe_destroy_socket(WardenclyffeSocket socket) {
-  delete static_cast<Socket*>(socket);
+  auto s = static_cast<Socket*>(socket);
+  s->Destroy();
+  delete s;
 }
 
 WardenclyffeReads wardenclyffe_read(WardenclyffeSocket socket) {

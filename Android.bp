@@ -9,6 +9,11 @@ cc_binary {
         "android/video/video.cpp",
         "android/socket.cpp",
     ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Wthread-safety"
+    ],
     compile_multilib: "first",
 
     init_rc: [

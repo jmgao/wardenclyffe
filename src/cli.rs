@@ -12,7 +12,7 @@ use crate::{
 #[command(author, version, about)]
 struct Args {
   /// Path of configuration file to use.
-  #[arg(short = 'C', default_value = "/data/vendor_de/0/wardenclyffe/config.json")]
+  #[arg(short = 'C', default_value = "/data/local/tmp/wardenclyffe/config.json")]
   config: PathBuf,
 
   #[arg(short = 'p')]

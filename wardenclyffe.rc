@@ -3,5 +3,5 @@ service wardenclyffe /system/bin/linker64 /system/bin/wardenclyffe
     user root
     seclabel u:r:su:s0
 
-on post-fs
+on post-fs-data
     start wardenclyffe

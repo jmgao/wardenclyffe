@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <deque>
+#include <future>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -95,10 +96,13 @@ struct VideoSocket : public Socket {
   std::deque<std::string> descriptions_ GUARDED_BY(frame_mutex_);
   std::vector<WardenclyffeRead> reads_ GUARDED_BY(frame_mutex_);
 
-  struct DisplayBufferConsumerCallbacks : public android::BnConsumerListener {
-    explicit DisplayBufferConsumerCallbacks(VideoSocket& parent) : parent_(parent) {}
+  std::future<void> display_consumer_disconnect_future_;
 
-    virtual void onDisconnect() final {}
+  struct DisplayBufferConsumerCallbacks : public android::BnConsumerListener {
+    DisplayBufferConsumerCallbacks(VideoSocket& parent, std::promise<void> disconnect_promise)
+        : parent_(parent), disconnect_promise_(std::move(disconnect_promise)) {}
+
+    virtual void onDisconnect() final { disconnect_promise_.set_value(); }
     virtual void onFrameDequeued(const uint64_t) final {}
     virtual void onFrameCancelled(const uint64_t) final {}
     virtual void onFrameDetached(const uint64_t) final {}
@@ -109,6 +113,7 @@ struct VideoSocket : public Socket {
 
    private:
     VideoSocket& parent_;
+    std::promise<void> disconnect_promise_;
   };
 
   struct DisplayBufferProducerCallbacks : public android::BnProducerListener {

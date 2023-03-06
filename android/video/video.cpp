@@ -259,7 +259,10 @@ bool VideoSocket::createVirtualDisplay() {
     return false;
   }
 
-  auto display_consumer_callbacks = sp<DisplayBufferConsumerCallbacks>::make(*this);
+  std::promise<void> disconnect_promise;
+  display_consumer_disconnect_future_ = disconnect_promise.get_future();
+  auto display_consumer_callbacks =
+      sp<DisplayBufferConsumerCallbacks>::make(*this, std::move(disconnect_promise));
   auto display_producer_callbacks = sp<DisplayBufferProducerCallbacks>::make(*this);
   BnGraphicBufferProducer::QueueBufferOutput queue_buffer_output;
 
@@ -297,6 +300,7 @@ void VideoSocket::destroyVirtualDisplay() {
   if (display_consumer_) {
     display_consumer_->consumerDisconnect();
     display_consumer_ = nullptr;
+    display_consumer_disconnect_future_.wait();
   }
   if (display_producer_) {
     display_producer_->disconnect(NATIVE_WINDOW_API_MEDIA);

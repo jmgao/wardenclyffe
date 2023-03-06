@@ -59,9 +59,11 @@ struct VideoSocket : public Socket {
 
   void destroyVirtualDisplay() REQUIRES(buffer_queue_mutex_);
 
-  void setDisplayProjection(android::SurfaceComposerClient::Transaction& t,
-                            android::sp<android::IBinder> display,
-                            const android::ui::DisplayState& display_state);
+  void checkOrientation() EXCLUDES(buffer_queue_mutex_);
+  static void setDisplayProjection(android::SurfaceComposerClient::Transaction& t,
+                                   android::sp<android::IBinder> display,
+                                   const android::ui::DisplayState& display_state, uint32_t width,
+                                   uint32_t height);
 
   virtual void onFrameReceived() = 0;
 
@@ -76,6 +78,7 @@ struct VideoSocket : public Socket {
   float video_framerate_ = 0;
 
   std::mutex buffer_queue_mutex_;
+  android::sp<android::IBinder> physical_display_;
   android::sp<android::IBinder> display_;
   android::sp<android::IGraphicBufferConsumer> display_consumer_ GUARDED_BY(buffer_queue_mutex_);
   android::sp<android::IGraphicBufferProducer> display_producer_ GUARDED_BY(buffer_queue_mutex_);

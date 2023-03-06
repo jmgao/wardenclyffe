@@ -122,10 +122,12 @@ WardenclyffeReads VideoSocket::Read() {
 }
 
 void VideoSocket::DisplayBufferConsumerCallbacks::onFrameAvailable(const BufferItem&) {
+  parent_.checkOrientation();
   parent_.onFrameReceived();
 }
 
 void VideoSocket::DisplayBufferConsumerCallbacks::onFrameReplaced(const BufferItem&) {
+  parent_.checkOrientation();
   parent_.onFrameReceived();
 }
 
@@ -152,19 +154,19 @@ bool VideoSocket::fetchDisplayParameters() {
     return false;
   }
 
-  sp<IBinder> display = SurfaceComposerClient::getPhysicalDisplayToken(*displayId);
-  if (display == nullptr) {
+  physical_display_ = SurfaceComposerClient::getPhysicalDisplayToken(*displayId);
+  if (!physical_display_) {
     LOG(ERROR) << "Failed to get display";
     return false;
   }
 
-  status_t err = SurfaceComposerClient::getDisplayState(display, &display_state_);
+  status_t err = SurfaceComposerClient::getDisplayState(physical_display_, &display_state_);
   if (err != NO_ERROR) {
     LOG(ERROR) << "Failed to get display state";
     return false;
   }
 
-  err = SurfaceComposerClient::getActiveDisplayMode(display, &display_mode_);
+  err = SurfaceComposerClient::getActiveDisplayMode(physical_display_, &display_mode_);
   if (err != NO_ERROR) {
     LOG(ERROR) << "Failed to get display mode";
     return false;
@@ -180,8 +182,39 @@ bool VideoSocket::fetchDisplayParameters() {
   return true;
 }
 
+void VideoSocket::checkOrientation() {
+  // Check orientation, update if it has changed.
+  //
+  // Polling for changes is inefficient and wrong, but the
+  // useful stuff is hard to get at without a Dalvik VM.
+  std::lock_guard<std::mutex> lock(buffer_queue_mutex_);
+
+  ui::DisplayState current_display_state;
+  status_t rc = SurfaceComposerClient::getDisplayState(physical_display_, &current_display_state);
+  if (rc != NO_ERROR) {
+    LOG(WARNING) << "getDisplayState failed: " << statusToString(rc);
+  } else if (display_state_.orientation != current_display_state.orientation ||
+             display_state_.layerStack != current_display_state.layerStack) {
+    LOG(INFO) << "Updating display state";
+    display_state_ = current_display_state;
+
+    // We can't directly apply the new display projection, because we're being called with locks held.
+    // As an awful hack around this, spawn a thread that does it for us.
+    sp<IBinder> display = display_;
+    uint32_t width = video_width_;
+    uint32_t height = video_height_;
+
+    std::thread([display, current_display_state, width, height]() {
+      SurfaceComposerClient::Transaction t;
+      setDisplayProjection(t, display, current_display_state, width, height);
+      t.apply();
+    }).detach();
+  }
+}
+
 void VideoSocket::setDisplayProjection(SurfaceComposerClient::Transaction& t, sp<IBinder> display,
-                                       const ui::DisplayState& display_state) {
+                                       const ui::DisplayState& display_state, uint32_t width,
+                                       uint32_t height) {
   // Set the region of the layer stack we're interested in, which in our case is "all of it".
   Rect layer_stack_rect(display_state.layerStackSpaceRect);
 
@@ -200,22 +233,20 @@ void VideoSocket::setDisplayProjection(SurfaceComposerClient::Transaction& t, sp
   // hint, we can essentially get a 720x1280 video instead of 1280x720.)
   // In that case, we swap the configured video width/height and then
   // supply a rotation value to the display projection.
-  uint32_t video_width = video_width_;
-  uint32_t video_height = video_height_;
   uint32_t out_width, out_height;
 
-  if (video_height > static_cast<uint32_t>(video_width * display_aspect)) {
+  if (height > static_cast<uint32_t>(width * display_aspect)) {
     // limited by narrow width; reduce height
-    out_width = video_width;
-    out_height = static_cast<uint32_t>(video_width * display_aspect);
+    out_width = width;
+    out_height = static_cast<uint32_t>(width * display_aspect);
   } else {
     // limited by short height; restrict width
-    out_height = video_height;
-    out_width = static_cast<uint32_t>(video_height / display_aspect);
+    out_height = height;
+    out_width = static_cast<uint32_t>(height / display_aspect);
   }
   uint32_t off_x, off_y;
-  off_x = (video_width - out_width) / 2;
-  off_y = (video_height - out_height) / 2;
+  off_x = (width - out_width) / 2;
+  off_y = (height - out_height) / 2;
   Rect display_rect(off_x, off_y, off_x + out_width, off_y + out_height);
 
   t.setDisplayProjection(display, ui::ROTATION_0, layer_stack_rect, display_rect);
@@ -251,7 +282,7 @@ bool VideoSocket::createVirtualDisplay() {
 
 bool VideoSocket::prepareVirtualDisplay() {
   SurfaceComposerClient::Transaction t;
-  setDisplayProjection(t, display_, display_state_);
+  setDisplayProjection(t, display_, display_state_, video_width_, video_height_);
   t.setDisplayLayerStack(display_, display_state_.layerStack);
   t.apply();
   return true;
@@ -395,24 +426,6 @@ bool MediaCodecSocket::startEncoder() {
       switch (err) {
         case NO_ERROR:
           if (size != 0) {
-            LOG(VERBOSE) << "Got data in buffer " << buf_index << ", size = " << size
-                         << ", pts = " << pts_usec;
-
-            // Check orientation, update if it has changed.
-            //
-            // Polling for changes is inefficient and wrong, but the
-            // useful stuff is hard to get at without a Dalvik VM.
-            ui::DisplayState current_display_state;
-            err = SurfaceComposerClient::getDisplayState(display_, &current_display_state);
-            if (err != NO_ERROR) {
-              LOG(WARNING) << "getDisplayState failed (err = " << err << ")";
-            } else if (display_state_.orientation != current_display_state.orientation ||
-                       display_state_.layerStack != current_display_state.layerStack) {
-              LOG(INFO) << "Updating display state";
-              std::lock_guard<std::mutex> lock(buffer_queue_mutex_);
-              prepareVirtualDisplay();
-            }
-
             Frame frame;
             if (flags & BUFFER_FLAG_CODEC_CONFIG) {
               frame.type = FrameType::Description;

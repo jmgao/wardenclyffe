@@ -114,16 +114,18 @@ impl Server {
   pub fn run(self) -> Result<()> {
     android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info));
 
-    let config = self.config.populate_defaults();
+    let config = Arc::new(self.config.populate_defaults());
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async move {
+      let config = config.clone();
       let addr = format!("0.0.0.0:{}", config.port.unwrap())
         .parse::<SocketAddr>()
         .unwrap();
       if config.tls == Some(config::TLS::Disabled) {
         let service = make_service_fn(move |conn: &AddrStream| {
+          let config = config.clone();
           let remote_addr = conn.remote_addr();
-          let service = service_fn(move |req| handle_request(req, remote_addr));
+          let service = service_fn(move |req| handle_request(config.clone(), req, remote_addr));
           async move { Ok::<_, io::Error>(service) }
         });
 
@@ -132,8 +134,9 @@ impl Server {
       } else {
         let tls_cfg = Arc::new(Server::load_certs(&config).expect("failed to load TLS certs"));
         let service = make_service_fn(move |conn: &TlsStream| {
+          let config = config.clone();
           let remote_addr = conn.remote_addr();
-          let service = service_fn(move |req| handle_request(req, remote_addr));
+          let service = service_fn(move |req| handle_request(config.clone(), req, remote_addr));
           async move { Ok::<_, io::Error>(service) }
         });
         let incoming = AddrIncoming::bind(&addr).unwrap();

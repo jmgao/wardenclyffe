@@ -1,5 +1,6 @@
 use std::ffi::CString;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 
@@ -17,9 +18,10 @@ use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::protocol::frame::CloseFrame;
 use tungstenite::protocol::{Message, Role};
 
-use include_dir::{include_dir, Dir};
-
+use crate::config::{Config, HttpContent};
 use crate::ffi::*;
+
+use include_dir::{include_dir, Dir, File};
 
 static HTML_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/html");
 
@@ -100,7 +102,14 @@ async fn handle_websocket(
   Ok(())
 }
 
-pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<Response<Body>> {
+fn get_http_content(http_content: &HttpContent, path: &str) -> Option<Vec<u8>> {
+  match http_content {
+    HttpContent::Embedded => HTML_DIR.get_file(path).map(File::contents).map(<[u8]>::to_vec),
+    HttpContent::Path(base_path) => std::fs::read(base_path.join(path)).ok(),
+  }
+}
+
+pub async fn handle_request(config: Arc<Config>, mut req: Request<Body>, addr: SocketAddr) -> Result<Response<Body>> {
   let upgrade = HeaderValue::from_static("Upgrade");
   let websocket = HeaderValue::from_static("websocket");
   let headers = req.headers();
@@ -161,9 +170,11 @@ pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<
     return Ok(response);
   }
 
+  let http_content = config.http_content.as_ref().unwrap();
+
   let mut path = &path[1..];
-  if let Some(file) = HTML_DIR.get_file(path) {
-    return Ok(Response::new(Body::from(file.contents())));
+  if let Some(file) = get_http_content(http_content, path) {
+    return Ok(Response::new(Body::from(file)));
   }
 
   // Assume it's a directory, look for index.html.
@@ -172,8 +183,8 @@ pub async fn handle_request(mut req: Request<Body>, addr: SocketAddr) -> Result<
   }
 
   let index_path = format!("{}/{}", path, "index.html");
-  if let Some(file) = HTML_DIR.get_file(&index_path) {
-    return Ok(Response::new(Body::from(file.contents())));
+  if let Some(file) = get_http_content(http_content, &index_path) {
+    return Ok(Response::new(Body::from(file)));
   }
 
   let mut response = Response::new(Body::from(format!("File not found: {path}")));

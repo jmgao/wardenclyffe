@@ -23,7 +23,13 @@ class WebGLRenderer {
 
   constructor(canvas) {
     this.#canvas = canvas;
-    const gl = this.#ctx = canvas.getContext("webgl");
+    const gl = this.#ctx = canvas.getContext("webgl", {
+      alpha: false,
+      antialias: false,
+      desynchronized: true,
+      preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
+    });
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vertexShader, WebGLRenderer.vertexShaderSource);

@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include <atomic>
+#include <chrono>
 #include <deque>
 #include <future>
 #include <mutex>
@@ -29,9 +30,23 @@ struct Frame {
   int64_t timestamp;
 };
 
+struct FrameTimer {
+  explicit FrameTimer(std::string name) : name_(std::move(name)) {}
+
+  bool Tick(size_t amount = 1);
+
+ private:
+  const std::string name_;
+
+  std::optional<std::chrono::steady_clock::time_point> last_time_;
+  size_t counter_ = 0;
+};
+
 struct VideoSocket : public Socket {
-  VideoSocket() = default;
-  VideoSocket(bool emit_descriptors) : emit_descriptors_(emit_descriptors) {}
+  VideoSocket(bool emit_descriptors = true)
+      : encode_timer_("Encode"),
+        transport_timer_("Transport"),
+        emit_descriptors_(emit_descriptors) {}
   virtual ~VideoSocket() { VideoSocket::Destroy(); }
 
   static VideoSocket* Create(std::string_view path);
@@ -71,11 +86,14 @@ struct VideoSocket : public Socket {
   virtual bool startEncoder() REQUIRES(buffer_queue_mutex_) = 0;
   virtual uint64_t getGrallocUsageBits() = 0;
 
-  bool emit_descriptors_ = false;
+  FrameTimer encode_timer_;
+  FrameTimer transport_timer_;
+
+  bool emit_descriptors_;
 
   uint32_t video_width_ = 0;
   uint32_t video_height_ = 0;
-  float video_framerate_ = 0;
+  float video_framerate_ = 30;
 
   std::mutex buffer_queue_mutex_;
   android::sp<android::IBinder> physical_display_;
@@ -86,7 +104,7 @@ struct VideoSocket : public Socket {
   android::ui::DisplayState display_state_;
   android::ui::DisplayMode display_mode_;
 
-  std::mutex frame_mutex_ ACQUIRED_BEFORE(buffer_queue_mutex_);
+  std::mutex frame_mutex_;
   std::condition_variable cv_;
   std::atomic<bool> running_ = false;
 
@@ -179,8 +197,6 @@ struct H264Socket : public MediaCodecSocket {
  protected:
   virtual const char* getCodecMimeType() final;
   virtual android::sp<android::AMessage> getCodecFormat() final;
-
-  uint32_t video_bitrate_ = 20'000'000;
 };
 
 struct JPEGSocket : public VideoSocket {

@@ -107,18 +107,32 @@ function postStatus() {
   pendingStatus = {};
 }
 
-// Rendering. Drawing is limited to once per animation frame.
 let decoder = null;
 let renderer = null;
 
 let pendingFrames = [];
 
 let startTime = null;
+let decodeQueueDepth = 0;
 let decodeFrameCount = 0;
 let renderFrameCount = 0;
 
+let renderingStarted = false;
+const maxRenderQueueDepth = 4;
+
+// TODO: Keep track of frame timestamps and use them to properly delay requestAnimationFrame.
+//       Right now, our frame timing sucks because if we fall behind by a frame, we can end up
+//       rendering pairs of frames at the display refresh rate potentially forever.
 function enqueueFrame(frame) {
+  while (pendingFrames.length >= maxRenderQueueDepth) {
+    const dropped = pendingFrames.shift();
+    dropped.close();
+  }
   pendingFrames.push(frame);
+  if (!renderingStarted) {
+    requestAnimationFrame(renderFrame);
+    renderingStarted = true;
+  }
 }
 
 function renderFrame() {
@@ -126,15 +140,16 @@ function renderFrame() {
     ++renderFrameCount;
     const pendingFrame = pendingFrames.shift();
     renderer.draw(pendingFrame);
+    requestAnimationFrame(renderFrame);
+  } else {
+    renderingStarted = false;
   }
-
-  requestAnimationFrame(renderFrame);
 }
 
 function receiveFrame(frame) {
   const chunk = new EncodedVideoChunk(frame.data);
   decoder.decode(chunk);
-  setStatus("decodequeue", `${decoder.decodeQueueSize} frames`);
+  ++decodeQueueDepth;
 }
 
 function start({host, canvas}) {
@@ -142,6 +157,7 @@ function start({host, canvas}) {
   decoder = new VideoDecoder({
     output(frame) {
       ++decodeFrameCount;
+      --decodeQueueDepth;
 
       // Update statistics once a second.
       const now = performance.now();
@@ -160,6 +176,7 @@ function start({host, canvas}) {
           setStatus("render", `${renderFps.toFixed(0)} fps`);
           setStatus("decode", `${decodeFps.toFixed(0)} fps`);
           setStatus("renderqueue", `${pendingFrames.length} frame(s)`);
+          setStatus("decodequeue", `${decodeQueueDepth} frame(s)`);
           postStatus();
         }
       }
@@ -173,13 +190,12 @@ function start({host, canvas}) {
     }
   });
   const config = {
-    codec: "avc1.42401f",
+    codec: "avc1.4d0029",
     optimizeForLatency: true,
   };
   decoder.configure(config);
 
   self.addEventListener("message", receiveFrame);
-  requestAnimationFrame(renderFrame);
 }
 
 self.addEventListener("message", message => start(message.data), {once: true});

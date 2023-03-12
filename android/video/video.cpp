@@ -41,6 +41,24 @@ static inline uint32_t floorToEven(uint32_t num) {
   return num & ~1;
 }
 
+bool FrameTimer::Tick(size_t amount) {
+  counter_ += amount;
+
+  auto now = std::chrono::steady_clock::now();
+  if (!last_time_) {
+    last_time_ = now;
+  } else {
+    auto elapsed = now - *last_time_;
+    if (elapsed > std::chrono::seconds(1)) {
+      LOG(INFO) << name_ << ": " << counter_ << " FPS";
+      counter_ = 0;
+      last_time_ = now;
+      return true;
+    }
+  }
+  return false;
+}
+
 VideoSocket* VideoSocket::Create(std::string_view path) {
   VideoSocket* result = nullptr;
   if (android::base::ConsumePrefix(&path, "h264/")) {
@@ -85,7 +103,6 @@ WardenclyffeReads VideoSocket::Read() {
   }
 
   const Frame& frame = frames_.at(0);
-
   if (emit_descriptors_) {
     const char* frame_type = nullptr;
     switch (frame.type) {
@@ -118,6 +135,8 @@ WardenclyffeReads VideoSocket::Read() {
   });
   result.reads = reads_.data();
   result.read_count = reads_.size();
+
+  transport_timer_.Tick();
   return result;
 }
 
@@ -322,8 +341,7 @@ void MediaCodecSocket::CodecBufferProducerCallbacks::onBuffersDiscarded(
 }
 
 void MediaCodecSocket::onFrameReceived() {
-  std::lock_guard<std::mutex> lock1(frame_mutex_);
-  std::lock_guard<std::mutex> lock2(buffer_queue_mutex_);
+  std::lock_guard<std::mutex> lock(buffer_queue_mutex_);
 
   if (!display_consumer_) {
     LOG(INFO) << "display consumer was destroyed";
@@ -419,7 +437,6 @@ bool MediaCodecSocket::startEncoder() {
       LOG(FATAL) << "failed to get output buffers (err = " << err << ")";
     }
 
-    bool skip = false;
     while (running_) {
       size_t buf_index, offset, size;
       int64_t pts_usec;
@@ -439,21 +456,26 @@ bool MediaCodecSocket::startEncoder() {
               frame.type = FrameType::Interframe;
             }
 
-            std::lock_guard<std::mutex> lock(frame_mutex_);
-            char* p = reinterpret_cast<char*>(buffers[buf_index]->data());
-            if (frame.type == FrameType::Description) {
-              partial_frame_.assign(p, p + size);
-            } else {
-              std::vector<char> data = std::move(partial_frame_);
+            bool new_frame = false;
+            {
+              std::lock_guard<std::mutex> lock(frame_mutex_);
+              char* p = reinterpret_cast<char*>(buffers[buf_index]->data());
+              if (frame.type == FrameType::Description) {
+                partial_frame_.assign(p, p + size);
+              } else {
+                encode_timer_.Tick();
 
-              if (!skip) {
+                std::vector<char> data = std::move(partial_frame_);
                 data.insert(data.end(), p, p + size);
                 frame.data = std::move(data);
                 frame.timestamp = pts_usec;
                 frames_.push_back(std::move(frame));
-                cv_.notify_one();
+                new_frame = true;
               }
-              skip = !skip;
+            }
+
+            if (new_frame) {
+              cv_.notify_one();
             }
           }
           err = codec->releaseOutputBuffer(buf_index);
@@ -470,7 +492,7 @@ bool MediaCodecSocket::startEncoder() {
           break;
 
         case -EAGAIN:  // INFO_TRY_AGAIN_LATER
-          LOG(VERBOSE) << "Got -EAGAIN, looping";
+          LOG(INFO) << "Got -EAGAIN, looping";
           break;
 
         case android::INFO_FORMAT_CHANGED:  // INFO_OUTPUT_FORMAT_CHANGED

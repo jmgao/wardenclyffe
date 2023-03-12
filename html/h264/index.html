@@ -29,14 +29,17 @@
     <colgroup>
         <col span="2">
         <col span="2">
+        <col span="2">
     </colgroup>
     <tr>
       <th align="right">Decode</th><td id="decode">Not started</td>
       <th align="right">Render</th><td id="render">Not started</td>
+      <th align="right">Socket</th><td id="websocketFps">Not started</td>
     </tr>
     <tr>
-      <th align="right">Queue</th><td id="decodequeue">0 frame(s)</td>
-      <th align="right">Queue</th><td id="renderqueue">0 frame(s)</td>
+      <th align="right">Queue</th><td id="decodequeue">Not started</td>
+      <th align="right">Queue</th><td id="renderqueue">Not started</td>
+      <th align="right">Bandwidth</th><td id="websocketKbps">Not started</td>
     </tr>
   </table>
 
@@ -46,6 +49,8 @@
       render: document.querySelector("#render"),
       decodequeue: document.querySelector("#decodequeue"),
       renderqueue: document.querySelector("#renderqueue"),
+      websocketFps: document.querySelector("#websocketFps"),
+      websocketKbps: document.querySelector("#websocketKbps"),
     };
 
     function setStatus(message) {
@@ -62,14 +67,59 @@
     worker.addEventListener("message", setStatus);
     worker.postMessage({canvas}, [canvas]);
 
-    let video_socket = new WebSocket(`wss://${window.location.host}/video/h264/`);
+    let ws_prefix = "ws";
+    if (document.location.protocol === 'https:') {
+      ws_prefix = "wss";
+    }
+
+    let startTime = performance.now();
+    let frameCount = 0;
+    let frameSize = 0;
+    let video_socket = new WebSocket(`${ws_prefix}://${window.location.host}/video/h264/`);
+    video_socket.binaryType = "arraybuffer";
+
+    let descriptor = null;
     video_socket.addEventListener('message', async (event) => {
-      const buf = await event.data.arrayBuffer();
-      worker.postMessage({
-        type: "key",
-        timestamp: (event.timestamp * 1000) | 0,
-        data: buf,
-      }, [buf]);
+      if (event.data instanceof ArrayBuffer) {
+        const buf = event.data;
+
+        ++frameCount;
+        frameSize += buf.byteLength;
+        let now = performance.now()
+        let elapsed = (now - startTime) / 1000;
+        if (elapsed > 1.0) {
+          setStatus({
+            data: {
+              websocketFps: `${(frameCount / elapsed).toFixed(0)} FPS`,
+              websocketKbps: `${(frameSize / elapsed / 1024).toFixed(0)} kBps`
+            }
+          });
+          startTime = now;
+          frameSize = 0;
+          frameCount = 0;
+        }
+
+        let frame = {
+          data: buf,
+        };
+
+        if (descriptor !== null) {
+          frame.type = descriptor.type;
+          frame.timestamp = descriptor.timestamp;
+          descriptor = null;
+        } else {
+          console.error("Received frame without descriptor");
+          frame.type = "key";
+          frame.timestamp = (event.timestamp * 1000) | 0;
+        }
+
+        worker.postMessage(frame, [buf]);
+      } else {
+        if (descriptor !== null) {
+          console.error("Received multiple descriptors without intervening frame");
+        }
+        descriptor = JSON.parse(event.data);
+      }
     });
   </script>
 </body>

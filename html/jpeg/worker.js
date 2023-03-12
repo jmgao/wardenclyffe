@@ -42,7 +42,7 @@ class WebGLRenderer {
     const shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram (shaderProgram );
+    gl.linkProgram(shaderProgram);
     if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
       throw gl.getProgramInfoLog(shaderProgram);
     }

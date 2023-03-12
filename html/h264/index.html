@@ -1,21 +1,43 @@
 <!doctype html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width,user-scalable=no">
   <style>
-    html, body {
+    html {
+      background-color: black;
+      color: white;
+      touch-action: none;
+    }
+    body {
       width:  100%;
       height: 100%;
       margin: 0;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+    }
+    table {
+      margin: auto;
     }
   </style>
 </head>
 <body>
   <canvas></canvas>
   <table cellspacing="8" id="status">
-    <tr><th align="right">Decode</th><td id="decode">Not started</td></tr>
-    <tr><th align="right">Render</th><td id="render">Not started</td></tr>
-    <tr><th align="right">Decode Queue</th><td id="decodequeue">0 frame(s)</td></tr>
-    <tr><th align="right">Render Queue</th><td id="renderqueue">0 frame(s)</td></tr>
+    <colgroup>
+        <col span="2">
+        <col span="2">
+    </colgroup>
+    <tr>
+      <th align="right">Decode</th><td id="decode">Not started</td>
+      <th align="right">Render</th><td id="render">Not started</td>
+    </tr>
+    <tr>
+      <th align="right">Queue</th><td id="decodequeue">0 frame(s)</td>
+      <th align="right">Queue</th><td id="renderqueue">0 frame(s)</td>
+    </tr>
   </table>
 
   <script type="module">

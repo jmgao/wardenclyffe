@@ -5,3 +5,8 @@ service wardenclyffe /system/bin/linker64 /system/bin/wardenclyffe
 
 on post-fs-data
     start wardenclyffe
+
+on property:sys.boot_completed=1
+    exec -- wm size 2360x1800
+    setprop persist.vendor.charge.start.level 65
+    setprop persist.vendor.charge.stop.level 70

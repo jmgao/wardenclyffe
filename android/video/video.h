@@ -50,9 +50,7 @@ struct VideoSocket : public Socket {
     DestroyLocked();
   }
 
-  virtual void DestroyLocked() REQUIRES(buffer_queue_mutex_) {
-    destroyVirtualDisplay();
-  }
+  virtual void DestroyLocked() REQUIRES(buffer_queue_mutex_) { destroyVirtualDisplay(); }
 
  protected:
   bool fetchDisplayParameters();

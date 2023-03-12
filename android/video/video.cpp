@@ -198,8 +198,8 @@ void VideoSocket::checkOrientation() {
     LOG(INFO) << "Updating display state";
     display_state_ = current_display_state;
 
-    // We can't directly apply the new display projection, because we're being called with locks held.
-    // As an awful hack around this, spawn a thread that does it for us.
+    // We can't directly apply the new display projection, because we're being called with locks
+    // held. As an awful hack around this, spawn a thread that does it for us.
     sp<IBinder> display = display_;
     uint32_t width = video_width_;
     uint32_t height = video_height_;

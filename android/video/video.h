@@ -37,6 +37,7 @@ struct VideoSocket : public Socket {
   static VideoSocket* Create(std::string_view path);
 
   virtual WardenclyffeReads Read() final;
+  virtual bool SupportsRead() final { return true; }
 
   bool Initialize() EXCLUDES(buffer_queue_mutex_) {
     std::lock_guard<std::mutex> lock(buffer_queue_mutex_);

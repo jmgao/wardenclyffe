@@ -37,6 +37,18 @@ void wardenclyffe_destroy_socket(WardenclyffeSocket socket) {
   delete s;
 }
 
+bool wardenclyffe_supports_read(WardenclyffeSocket socket) {
+  return static_cast<Socket*>(socket)->SupportsRead();
+}
+
 WardenclyffeReads wardenclyffe_read(WardenclyffeSocket socket) {
   return static_cast<Socket*>(socket)->Read();
+}
+
+bool wardenclyffe_supports_write(WardenclyffeSocket socket) {
+  return static_cast<Socket*>(socket)->SupportsWrite();
+}
+
+bool wardenclyffe_write(WardenclyffeSocket socket, const void* data, size_t len) {
+  return static_cast<Socket*>(socket)->Write(data, len);
 }

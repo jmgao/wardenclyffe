@@ -32,4 +32,10 @@ extern void wardenclyffe_destroy_socket(WardenclyffeSocket socket);
 
 extern WardenclyffeReads wardenclyffe_read(WardenclyffeSocket socket);
 
+extern bool wardenclyffe_supports_read(WardenclyffeSocket socket);
+
+extern bool wardenclyffe_supports_write(WardenclyffeSocket socket);
+
+extern bool wardenclyffe_write(WardenclyffeSocket socket, const void *data, size_t len);
+
 } // extern "C"

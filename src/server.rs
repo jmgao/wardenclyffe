@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{c_void, CString};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -39,13 +39,36 @@ async fn handle_websocket(
   }
 
   let (mut outgoing, incoming) = ws_stream.split();
+  let supports_read = unsafe { wardenclyffe_supports_read(wardenclyffe_socket) };
+  let supports_write = unsafe { wardenclyffe_supports_write(wardenclyffe_socket) };
+
   let incoming = incoming.try_for_each(|msg| {
-    info!("{addr}: received message: {}", msg.to_text().unwrap());
-    future::ok(())
+    let msg = msg.to_text().unwrap();
+    if supports_write {
+      debug!("{addr}: received message: {}", msg);
+      let msg_bytes = msg.as_bytes();
+
+      // TODO: The lifetime of the socket seems dubious here...
+      let result = unsafe {
+        wardenclyffe_write(
+          wardenclyffe_socket,
+          msg_bytes.as_ptr() as *const c_void,
+          msg_bytes.len(),
+        )
+      };
+      if result {
+        future::ok(())
+      } else {
+        future::err(tungstenite::Error::ConnectionClosed)
+      }
+    } else {
+      info!("{addr}: received unhandled message: {}", msg);
+      future::ok(())
+    }
   });
 
-  let outgoing = {
-    tokio::spawn(async move {
+  let outgoing = tokio::spawn(async move {
+    if supports_read {
       loop {
         let reads = {
           tokio::task::spawn_blocking(move || unsafe { wardenclyffe_read(wardenclyffe_socket) })
@@ -88,8 +111,10 @@ async fn handle_websocket(
           }
         }
       }
-    })
-  };
+    } else {
+      future::pending().await
+    }
+  });
 
   pin_mut!(incoming, outgoing);
   future::select(incoming, outgoing).await;
